@@ -1,5 +1,6 @@
 # Importando las bibliotecas necesarias
 from imutils.video import VideoStream
+from PIL import Image as im
 import matplotlib.pyplot as plt
 import imutils
 import cv2
@@ -11,8 +12,8 @@ DIR = 'C:/Users/pcjos/OneDrive/Documentos/VS/ComputerVision/Sources/'
 
 
 parametros = {
-    "type": "DICT_5X5_100",
-    "video": DIR+"aruco_sample.mp4",
+    "type": "DICT_APRILTAG_36h11",
+    "video": DIR+"AprilTag01.mp4",
     "output": DIR+"output.avi"
 }
 
@@ -22,6 +23,10 @@ ARUCO_DICT = {
 	"DICT_5X5_100": cv2.aruco.DICT_5X5_100,
 	"DICT_5X5_250": cv2.aruco.DICT_5X5_250,
 	"DICT_5X5_1000": cv2.aruco.DICT_5X5_1000,
+	"DICT_APRILTAG_16h5": cv2.aruco.DICT_APRILTAG_16h5,
+	"DICT_APRILTAG_25h9": cv2.aruco.DICT_APRILTAG_25h9,
+	"DICT_APRILTAG_36h10": cv2.aruco.DICT_APRILTAG_36h10,
+	"DICT_APRILTAG_36h11": cv2.aruco.DICT_APRILTAG_36h11
 }
 
 
@@ -37,14 +42,28 @@ from IPython.display import HTML
 
 
 #Lee el video
-video = imageio.mimread(parametros["video"], memtest= "1000MB")  #Loading video
+video = imageio.mimread(parametros["video"], memtest= "1000000MB")  #Loading video
 
 vs = cv2.VideoCapture(parametros["video"])
 writer = None
 
+# Total de frames en el video
+prop = cv2.cv.CV_CAP_PROP_FRAME_COUNT if imutils.is_cv2() \
+	else cv2.CAP_PROP_FRAME_COUNT
+total = int(vs.get(prop))
+print("[INFO] {} total frames in video".format(total))
+
+
 # Iterando sobre los cuadros del video
 output = []
-bakedAnim = np.matrix([[],[],[]])
+
+RawAnim = np.zeros((total,2))
+print(RawAnim.shape)
+
+
+
+i = 0
+
 while True:
 	# va leyendo cada frame del video
 	(grabbed, frame) = vs.read()
@@ -64,7 +83,6 @@ while True:
 	if len(corners) > 0:
 		# A lista
 		ids = ids.flatten()
-		i = 0
 		# Iterando sobre las coordenadas de las esquinas de cada BB
 		for (markerCorner, markerID) in zip(corners, ids):
 			corners = markerCorner.reshape((4, 2))
@@ -76,42 +94,23 @@ while True:
 			bottomLeft = (int(bottomLeft[0]), int(bottomLeft[1]))
 			topLeft = (int(topLeft[0]), int(topLeft[1]))
 
-			# Dibujando las BB's
-			cv2.line(frame, topLeft, topRight, (0, 255, 0), 2)
-			cv2.line(frame, topRight, bottomRight, (0, 255, 0), 2)
-			cv2.line(frame, bottomRight, bottomLeft, (0, 255, 0), 2)
-			cv2.line(frame, bottomLeft, topLeft, (0, 255, 0), 2)
-
 			# Encontrar el centro de cada ArUCo
 			cX = int((topLeft[0] + bottomRight[0]) / 2.0)
 			cY = int((topLeft[1] + bottomRight[1]) / 2.0)
 			cv2.circle(frame, (cX, cY), 4, (0, 0, 255), -1)
  
+			RawAnim[i,0] = cX
+			RawAnim[i,1] = cY
 
-			bakedAnim = np.append(bakedAnim, [[cX], [cY], [0]], axis = 1)
-			bakedAnim[i,i] = bakedAnim[i,i] - bakedAnim[0,0] 
 			i = i + 1
 
+#Normaliza imagen
+bakedAnimInt8 =  RawAnim
+bakedAnimInt8 = (255*(RawAnim - np.min(RawAnim))/np.ptp(RawAnim)).astype(np.uint8) 
 
-			# Dibujar el ID
-			cv2.putText(frame, str(markerID),
-				(topLeft[0], topLeft[1] - 15),
-				cv2.FONT_HERSHEY_SIMPLEX,
-				0.5, (0, 255, 0), 2)
+import numpy
+a = numpy.asarray(RawAnim)
+numpy.savetxt("bakedAnim01.csv", a, delimiter=",")
 
-	# Checar si el video writer es None
-	if writer is None:
-		# initialize our video writer
-		fourcc = cv2.VideoWriter_fourcc(*"MJPG")
-		writer = cv2.VideoWriter(parametros["output"], fourcc, 30,
-			(frame.shape[1], frame.shape[0]), True)
-
-	# Guardando la trama con los ArUCos detectados
-	output.append(frame)
-	writer.write(frame)
-
-print(bakedAnim)
-# Liberando los apuntadores inicializados
-print("[INFO] cleaning up...")
-writer.release()
+cv2.waitKey(0)
 vs.release()
